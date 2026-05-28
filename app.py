@@ -1,41 +1,39 @@
-from flask import Flask, request, jsonify
+import os
 import pymysql
+import re
 pymysql.install_as_MySQLdb()
 
-from flask_mysqldb import MySQL
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from flask_ext.mysql import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
-import config
-import re
-import os
 from werkzeug.utils import secure_filename
-from flask import send_from_directory
 
 app = Flask(__name__)
 CORS(app)
 
-app.config['MYSQL_HOST'] = config.MYSQL_HOST
-app.config['MYSQL_USER'] = config.MYSQL_USER
-app.config['MYSQL_PASSWORD'] = config.MYSQL_PASSWORD
-app.config['MYSQL_DB'] = config.MYSQL_DB
-app.config['MYSQL_PORT'] = config.MYSQL_PORT
+app.config['MYSQL_DATABASE_HOST'] = os.getenv("MYSQLHOST")
+app.config['MYSQL_DATABASE_USER'] = os.getenv("MYSQLUSER")
+app.config['MYSQL_DATABASE_PASSWORD'] = os.getenv("MYSQLPASSWORD")
+app.config['MYSQL_DATABASE_DB'] = os.getenv("MYSQLDATABASE")
+app.config['MYSQL_DATABASE_PORT'] = int(os.getenv("MYSQLPORT", 3306))
 
-mysql = MySQL(app)
+mysql = MySQL()
+mysql.init_app(app)
 
 def log_aktivitas(admin_id, aktivitas):
     try:
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
         cur.execute("""
             INSERT INTO aktivitas_admin (admin_id, aktivitas)
             VALUES (%s, %s)
         """, (admin_id, aktivitas))
-        mysql.connection.commit()
+        mysql.get_db().commit()
         cur.close()
     except Exception as e:
         print("Log aktivitas error:", e)
 
 UPLOAD_FOLDER = 'static/profile'
-
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
@@ -74,7 +72,7 @@ def register():
 
         password = generate_password_hash(password_raw)
 
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
 
         # cek email
         cur.execute("SELECT * FROM pengguna WHERE email=%s", (email,))
@@ -92,7 +90,7 @@ def register():
             (nama_pengguna, tanggal_lahir, jenis_kelamin, no_hp, email, password, 'pengguna')
         )
 
-        mysql.connection.commit()
+        mysql.get_db().commit()
         cur.close()
 
         return jsonify({'message': 'Registrasi berhasil'}), 201
@@ -109,7 +107,7 @@ def login():
         email = data.get('email')
         password = data.get('password')
 
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
         cur.execute("SELECT * FROM pengguna WHERE email=%s", (email,))
         user = cur.fetchone()
         cur.close()
@@ -144,14 +142,14 @@ def tambah_gejala():
     nama = data.get('nama')
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         "INSERT INTO gejala (kode_gejala, nama_gejala) VALUES (%s, %s)",
         (kode, nama)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
 
     # log aktivitas admin
@@ -164,7 +162,7 @@ def tambah_gejala():
 @app.route('/gejala/all', methods=['GET'])
 def get_all_gejala():
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("SELECT * FROM gejala ORDER BY id DESC")
 
@@ -187,7 +185,7 @@ def get_all_gejala():
 @app.route('/gejala/<int:id>', methods=['GET'])
 def get_gejala_by_id(id):
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("""
         SELECT *
@@ -219,7 +217,7 @@ def update_gejala(id):
     nama = data.get('nama')
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         """
@@ -231,7 +229,7 @@ def update_gejala(id):
         (kode, nama, id)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
     if admin_id:
         log_aktivitas(admin_id, f"Mengubah gejala {kode} (ID {id})")
@@ -245,14 +243,14 @@ def delete_gejala(id):
     data = request.get_json(silent=True) or {}
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         "DELETE FROM gejala WHERE id=%s",
         (id,)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
     if admin_id:
         log_aktivitas(admin_id, f"Menghapus gejala ID {id}")
@@ -269,7 +267,7 @@ def tambah_diagnosis():
     deskripsi = data.get('deskripsi')
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         """
@@ -280,7 +278,7 @@ def tambah_diagnosis():
         (kode, nama, deskripsi)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
 
     if admin_id:
@@ -292,7 +290,7 @@ def tambah_diagnosis():
 @app.route('/diagnosis/all', methods=['GET'])
 def get_all_diagnosis():
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("SELECT * FROM diagnosis ORDER BY id DESC")
 
@@ -316,7 +314,7 @@ def get_all_diagnosis():
 @app.route('/diagnosis/<int:id>', methods=['GET'])
 def get_diagnosis_by_id(id):
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("""
         SELECT *
@@ -349,7 +347,7 @@ def update_diagnosis(id):
     deskripsi = data.get('deskripsi')
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         """
@@ -362,7 +360,7 @@ def update_diagnosis(id):
         (kode, nama, deskripsi, id)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
 
     if admin_id:
@@ -376,14 +374,14 @@ def delete_diagnosis(id):
     data = request.get_json(silent=True) or {}
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         "DELETE FROM diagnosis WHERE id=%s",
         (id,)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
 
     if admin_id:
@@ -401,7 +399,7 @@ def tambah_rekomendasi():
     admin_id = data.get('admin_id')
 
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         """
@@ -412,7 +410,7 @@ def tambah_rekomendasi():
         (kode, deskripsi)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
 
     if admin_id:
@@ -424,7 +422,7 @@ def tambah_rekomendasi():
 @app.route('/rekomendasi/all', methods=['GET'])
 def get_all_rekomendasi():
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("SELECT * FROM rekomendasi ORDER BY id DESC")
 
@@ -447,7 +445,7 @@ def get_all_rekomendasi():
 @app.route('/rekomendasi/<int:id>', methods=['GET'])
 def get_rekomendasi_by_id(id):
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("""
         SELECT *
@@ -479,7 +477,7 @@ def update_rekomendasi(id):
     deskripsi = data.get('deskripsi')
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         """
@@ -491,7 +489,7 @@ def update_rekomendasi(id):
         (kode, deskripsi, id)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
 
     if admin_id: 
@@ -505,14 +503,14 @@ def delete_rekomendasi(id):
     data = request.get_json(silent=True) or {}
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute(
         "DELETE FROM rekomendasi WHERE id=%s",
         (id,)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
     cur.close()
 
     if admin_id:
@@ -531,7 +529,7 @@ def tambah_rule():
     gejala_ids = data.get('gejala_ids')
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     # simpan rule utama
     cur.execute(
@@ -543,7 +541,7 @@ def tambah_rule():
         (diagnosis_id, rekomendasi_id)
     )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
 
     rule_id = cur.lastrowid
 
@@ -559,7 +557,7 @@ def tambah_rule():
             (rule_id, gejala_id)
         )
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
 
     cur.close()
 
@@ -575,7 +573,7 @@ def tambah_rule():
 @app.route('/rule', methods=['GET'])
 def get_rule():
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("""
         SELECT
@@ -607,7 +605,7 @@ def get_rule():
         # ambil gejala
         cur.execute("""
             SELECT
-                gejala.nama_gejala,
+                gejala.kode_gejala,
                 gejala.id
 
             FROM rule_gejala
@@ -646,7 +644,7 @@ def get_rule():
 @app.route('/rule/<int:id>', methods=['GET'])
 def get_rule_by_id(id):
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("""
         SELECT
@@ -697,7 +695,7 @@ def update_rule(id):
     gejala_ids = data.get('gejala_ids')
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     # update rule utama
     cur.execute("""
@@ -722,7 +720,7 @@ def update_rule(id):
             VALUES (%s, %s)
         """, (id, gejala_id))
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
 
     cur.close()
 
@@ -741,7 +739,7 @@ def delete_rule(id):
     data = request.get_json(silent=True) or {}
     admin_id = data.get('admin_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     # hapus relasi gejala dulu
     cur.execute("""
@@ -755,7 +753,7 @@ def delete_rule(id):
         WHERE id=%s
     """, (id,))
 
-    mysql.connection.commit()
+    mysql.get_db().commit()
 
     cur.close()
 
@@ -775,7 +773,7 @@ def konsultasi():
     gejala_user = data.get('gejala')
     pengguna_id = data.get('pengguna_id')
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     # ambil semua rule
     cur.execute("SELECT id FROM rule")
@@ -867,7 +865,7 @@ def konsultasi():
                 hasil_terbaik['persen']
             ))
 
-            mysql.connection.commit()
+            mysql.get_db().commit()
 
         cur.close()
 
@@ -890,7 +888,7 @@ def konsultasi():
 def get_riwayat_konsultasi(id):
 
     try:
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
 
         cur.execute("""
             SELECT
@@ -936,14 +934,14 @@ def get_riwayat_konsultasi(id):
 def delete_riwayat_konsultasi(id):
 
     try:
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
 
         cur.execute("""
             DELETE FROM riwayat_konsultasi
             WHERE id=%s
         """, (id,))
 
-        mysql.connection.commit()
+        mysql.get_db().commit()
 
         cur.close()
 
@@ -960,7 +958,7 @@ def delete_riwayat_konsultasi(id):
 @app.route('/profile/<int:id>', methods=['GET'])
 def get_profile(id):
 
-    cur = mysql.connection.cursor()
+    cur = mysql.get_db().cursor()
 
     cur.execute("""
         SELECT
@@ -1010,7 +1008,7 @@ def update_profile(id):
         no_hp = data.get('no_hp')
         foto_profile = data.get('foto_profile')
 
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
 
         # cek email dipakai user lain
         cur.execute("""
@@ -1047,7 +1045,7 @@ def update_profile(id):
             id
         ))
 
-        mysql.connection.commit()
+        mysql.get_db().commit()
 
         cur.close()
 
@@ -1092,7 +1090,7 @@ def upload_profile(id):
 
         foto_path = f"/static/profile/{filename}"
 
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
 
         cur.execute("""
             UPDATE pengguna
@@ -1100,7 +1098,7 @@ def upload_profile(id):
             WHERE id_pengguna=%s
         """, (foto_path, id))
 
-        mysql.connection.commit()
+        mysql.get_db().commit()
 
         cur.close()
 
@@ -1122,11 +1120,11 @@ def profile_file(filename):
     )
 
 # HAPUS FOTO PROFILE
-@app.route('/delete-profile-photo/<int:id>', methods=['DELETE'])
+@app.route('/delete_profile_photo/<int:id>', methods=['DELETE'])
 def delete_profile_photo(id):
 
     try:
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
 
         # ambil foto lama
         cur.execute("""
@@ -1164,7 +1162,7 @@ def delete_profile_photo(id):
             WHERE id_pengguna=%s
         """, (id,))
 
-        mysql.connection.commit()
+        mysql.get_db().commit()
 
         cur.close()
 
@@ -1195,7 +1193,7 @@ def change_password(id):
                 'message': 'Konfirmasi password tidak cocok'
             }), 400
 
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
 
         # ambil user
         cur.execute("""
@@ -1229,7 +1227,7 @@ def change_password(id):
             WHERE id_pengguna=%s
         """, (hashed_password, id))
 
-        mysql.connection.commit()
+        mysql.get_db().commit()
 
         cur.close()
 
@@ -1247,7 +1245,7 @@ def change_password(id):
 def dashboard_admin():
 
     try:
-        cur = mysql.connection.cursor()
+        cur = mysql.get_db().cursor()
 
         # TOTAL DATA
         cur.execute("SELECT COUNT(*) FROM diagnosis")
@@ -1345,4 +1343,5 @@ def dashboard_admin():
         }), 500
     
 if __name__ == '__main__':
-    app.run(debug=True)
+    PORT = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=PORT, debug=True)
