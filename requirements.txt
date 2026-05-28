@@ -1,6 +1,6 @@
-Flask
-flask-cors
-flask-mysql
-PyMySQL
-Werkzeug
-gunicorn
+Flask==3.0.3
+flask-cors==4.0.1
+flask-mysql==1.6.0
+PyMySQL==1.1.1
+Werkzeug==3.0.3
+gunicorn==26.0.0
