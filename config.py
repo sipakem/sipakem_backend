@@ -1,10 +1,5 @@
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-MYSQL_HOST = os.getenv("MYSQL_HOST")
-MYSQL_USER = os.getenv("MYSQL_USER")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-MYSQL_DB = os.getenv("MYSQL_DB")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT"))
+app.config['MYSQL_HOST'] = os.getenv("MYSQLHOST")
+app.config['MYSQL_USER'] = os.getenv("MYSQLUSER")
+app.config['MYSQL_PASSWORD'] = os.getenv("MYSQLPASSWORD")
+app.config['MYSQL_DB'] = os.getenv("MYSQLDATABASE")
+app.config['MYSQL_PORT'] = int(os.getenv("MYSQLPORT", 3306))
