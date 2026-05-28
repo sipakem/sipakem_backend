@@ -1,7 +1,0 @@
-Flask
-flask-cors
-flask-mysqldb
-gunicorn
-python-dotenv
-Werkzeug
-mysqlclient
