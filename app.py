@@ -5,7 +5,6 @@ pymysql.install_as_MySQLdb()
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-CORS(app, resources={r"/*": {"origins": "*"}})
 from flask_mysqldb import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
