@@ -1,6 +1,6 @@
 Flask
 flask-cors
-flask-mysqldb
 gunicorn
 python-dotenv
 Werkzeug
+PyMySQL
