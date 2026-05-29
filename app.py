@@ -12,11 +12,11 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 CORS(app)
 
-app.config['MYSQL_DATABASE_HOST'] = os.getenv("MYSQLHOST")
-app.config['MYSQL_DATABASE_USER'] = os.getenv("MYSQLUSER")
-app.config['MYSQL_DATABASE_PASSWORD'] = os.getenv("MYSQLPASSWORD")
-app.config['MYSQL_DATABASE_DB'] = os.getenv("MYSQLDATABASE")
-app.config['MYSQL_DATABASE_PORT'] = int(os.getenv("MYSQLPORT", 3306))
+app.config['MYSQL_HOST'] = os.getenv("MYSQLHOST")
+app.config['MYSQL_USER'] = os.getenv("MYSQLUSER")
+app.config['MYSQL_PASSWORD'] = os.getenv("MYSQLPASSWORD")
+app.config['MYSQL_DB'] = os.getenv("MYSQLDATABASE")
+app.config['MYSQL_PORT'] = int(os.getenv("MYSQLPORT", 3306))
 
 mysql = MySQL()
 mysql.init_app(app)
