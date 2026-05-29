@@ -5,20 +5,28 @@ pymysql.install_as_MySQLdb()
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from flask_mysqldb import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 CORS(app)
 
-app.config['MYSQL_HOST'] = os.getenv("MYSQLHOST")
-app.config['MYSQL_USER'] = os.getenv("MYSQLUSER")
-app.config['MYSQL_PASSWORD'] = os.getenv("MYSQLPASSWORD")
-app.config['MYSQL_DB'] = os.getenv("MYSQLDATABASE")
-app.config['MYSQL_PORT'] = int(os.getenv("MYSQLPORT", 3306))
+def get_db_connection():
+    return pymysql.connect(
+        host=os.getenv("MYSQLHOST"),
+        user=os.getenv("MYSQLUSER"),
+        password=os.getenv("MYSQLPASSWORD"),
+        database=os.getenv("MYSQLDATABASE"),
+        port=int(os.getenv("MYSQLPORT", 3306)),
+        autocommit=True  # Otomatis melakukan commit data baru
+    )
 
-mysql = MySQL(app)
+class MySQLFake:
+    @property
+    def connection(self):
+        return get_db_connection()
+
+mysql = MySQLFake()
 
 def log_aktivitas(admin_id, aktivitas):
     try:
