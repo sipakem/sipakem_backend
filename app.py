@@ -2,6 +2,7 @@ import os
 import pymysql
 import re
 pymysql.install_as_MySQLdb()
+import traceback 
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -40,13 +41,11 @@ def log_aktivitas(admin_id, aktivitas):
     except Exception as e:
         print("Log aktivitas error:", e)
         
-if os.environ.get('RAILWAY_ENVIRONMENT'):
-    UPLOAD_FOLDER = '/app/static/profile'
-else:
-    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'static', 'profile')
+BASE_DIR = os.getcwd()
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'profile')
 
 if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(UPLOAD_FOLDER, mode=0o777, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -1072,46 +1071,38 @@ def update_profile(id):
 # UPLOAD FOTO PROFILE
 @app.route('/upload-profile/<int:id>', methods=['POST'])
 def upload_profile(id):
-
     try:
-
         if 'foto' not in request.files:
-            return jsonify({
-                'message': 'File tidak ditemukan'
-            }), 400
+            return jsonify({'message': 'File tidak ditemukan di dalam request (key harus "foto")'}), 400
 
         file = request.files['foto']
 
         if file.filename == '':
-            return jsonify({
-                'message': 'File kosong'
-            }), 400
+            return jsonify({'message': 'File kosong atau tidak ada nama file'}), 400
 
         filename = secure_filename(file.filename)
-
-        # nama unik
         filename = f"user_{id}_{filename}"
 
-        filepath = os.path.join(
-            app.config['UPLOAD_FOLDER'],
-            filename
-        )
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        if not os.path.exists(app.config['UPLOAD_FOLDER']):
+            os.makedirs(app.config['UPLOAD_FOLDER'], mode=0o777, exist_ok=True)
 
         file.save(filepath)
-
+        
         foto_path = f"/static/profile/{filename}"
 
-        cur = mysql.connection.cursor()
-
+        conn = mysql.connection
+        cur = conn.cursor()
         cur.execute("""
             UPDATE pengguna
             SET foto_profile=%s
             WHERE id_pengguna=%s
         """, (foto_path, id))
-
-        mysql.connection.commit()
-
+        
+        conn.commit()
         cur.close()
+        conn.close()
 
         return jsonify({
             'message': 'Foto berhasil diupload',
@@ -1119,9 +1110,9 @@ def upload_profile(id):
         })
 
     except Exception as e:
-        return jsonify({
-            'message': str(e)
-        }), 500
+        print("--- EROR UPLOAD FOTO ---")
+        traceback.print_exc() 
+        return jsonify({'message': f'Server Error saat upload: {str(e)}'}), 500
     
 @app.route('/static/profile/<filename>')
 def profile_file(filename):
