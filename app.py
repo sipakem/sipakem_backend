@@ -41,8 +41,17 @@ def log_aktivitas(admin_id, aktivitas):
     except Exception as e:
         print("Log aktivitas error:", e)
         
-BASE_DIR = os.getcwd()
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'profile')
+UPLOAD_FOLDER = '/app/static/profile'
+
+try:
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER, mode=0o777, exist_ok=True)
+    else:
+        os.chmod(UPLOAD_FOLDER, 0o777)
+except Exception as e:
+    print(f"Gagal mengatur folder volume: {e}")
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER, mode=0o777, exist_ok=True)
