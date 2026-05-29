@@ -18,8 +18,7 @@ app.config['MYSQL_PASSWORD'] = os.getenv("MYSQLPASSWORD")
 app.config['MYSQL_DB'] = os.getenv("MYSQLDATABASE")
 app.config['MYSQL_PORT'] = int(os.getenv("MYSQLPORT", 3306))
 
-mysql = MySQL()
-mysql.init_app(app)
+mysql = MySQL(app)
 
 def log_aktivitas(admin_id, aktivitas):
     try:
