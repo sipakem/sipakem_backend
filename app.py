@@ -41,20 +41,13 @@ def log_aktivitas(admin_id, aktivitas):
     except Exception as e:
         print("Log aktivitas error:", e)
         
-UPLOAD_FOLDER = '/app/static/profile'
-
-try:
-    if not os.path.exists(UPLOAD_FOLDER):
-        os.makedirs(UPLOAD_FOLDER, mode=0o777, exist_ok=True)
-    else:
-        os.chmod(UPLOAD_FOLDER, 0o777)
-except Exception as e:
-    print(f"Gagal mengatur folder volume: {e}")
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+UPLOAD_FOLDER = '/data'
 
 if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER, mode=0o777, exist_ok=True)
+    try:
+        os.makedirs(UPLOAD_FOLDER, mode=0o777, exist_ok=True)
+    except Exception as e:
+        print(f"Gagal membuat folder /data: {e}")
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -976,47 +969,81 @@ def delete_riwayat_konsultasi(id):
 # GET PROFILE
 @app.route('/profile/<int:id>', methods=['GET'])
 def get_profile(id):
-
     cur = mysql.connection.cursor()
-
-    cur.execute("""
-        SELECT
-            id_pengguna,
-            nama_pengguna,
-            tanggal_lahir,
-            jenis_kelamin,
-            no_hp,
-            email,
-            role,
-            foto_profile
-        FROM pengguna
-        WHERE id_pengguna=%s
-    """, (id,))
-
+    cur.execute("SELECT id_pengguna, nama_pengguna, tanggal_lahir, jenis_kelamin, no_hp, email, role, foto_profile FROM pengguna WHERE id_pengguna=%s", (id,))
     user = cur.fetchone()
-
     cur.close()
 
     if not user:
-        return jsonify({
-            'message': 'User tidak ditemukan'
-        }), 404
+        return jsonify({'message': 'User tidak ditemukan'}), 404
 
     return jsonify({
-        'id_pengguna': user[0],
-        'nama_pengguna': user[1],
+        'id_pengguna': user[0], 'nama_pengguna': user[1],
         'tanggal_lahir': user[2].strftime('%Y-%m-%d') if user[2] else '',
-        'jenis_kelamin': user[3] if user[3] else '',
-        'no_hp': user[4],
-        'email': user[5],
-        'role': user[6],
-        'foto_profile': user[7]
+        'jenis_kelamin': user[3] if user[3] else '', 'no_hp': user[4], 'email': user[5], 'role': user[6], 'foto_profile': user[7]
     })
+
+@app.route('/upload-profile/<int:id>', methods=['POST'])
+def upload_profile(id):
+    try:
+        if 'foto' not in request.files:
+            return jsonify({'message': 'File tidak ditemukan di dalam request (key harus "foto")'}), 400
+
+        file = request.files['foto']
+        if file.filename == '':
+            return jsonify({'message': 'File kosong atau tidak ada nama file'}), 400
+
+        filename = secure_filename(file.filename)
+        filename = f"user_{id}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        # Simpan file langsung ke dalam /data
+        file.save(filepath)
+        
+        # Simpan URL di database dengan awalan rute static baru
+        foto_path = f"/static/profile/{filename}"
+
+        cur = mysql.connection.cursor()
+        cur.execute("UPDATE pengguna SET foto_profile=%s WHERE id_pengguna=%s", (foto_path, id))
+        cur.close()
+
+        return jsonify({'message': 'Foto berhasil diupload', 'foto_profile': foto_path})
+    except Exception as e:
+        traceback.print_exc() 
+        return jsonify({'message': f'Server Error saat upload: {str(e)}'}), 500
+    
+# Rute ini akan membaca file langsung dari folder /data secara aman
+@app.route('/static/profile/<filename>')
+def profile_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/delete-profile-photo/<int:id>', methods=['DELETE'])
+def delete_profile_photo(id):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT foto_profile FROM pengguna WHERE id_pengguna=%s", (id,))
+        user = cur.fetchone()
+
+        if not user:
+            cur.close()
+            return jsonify({'message': 'User tidak ditemukan'}), 404
+
+        foto_path = user[0]
+        if foto_path:
+            filename_only = os.path.basename(foto_path)
+            full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename_only)
+            if os.path.exists(full_path):
+                os.remove(full_path)
+
+        cur.execute("UPDATE pengguna SET foto_profile=NULL WHERE id_pengguna=%s", (id,))
+        cur.close()
+        return jsonify({'message': 'Foto berhasil dihapus'})
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
 
 # UPDATE PROFILE
 @app.route('/profile/<int:id>', methods=['PUT'])
 def update_profile(id):
-
     try:
         data = request.get_json()
 
@@ -1025,11 +1052,10 @@ def update_profile(id):
         tanggal_lahir = data.get('tanggal_lahir')
         jenis_kelamin = data.get('jenis_kelamin')
         no_hp = data.get('no_hp')
-        foto_profile = data.get('foto_profile')
+        foto_profile_baru = data.get('foto_profile')
 
         cur = mysql.connection.cursor()
 
-        # cek email dipakai user lain
         cur.execute("""
             SELECT id_pengguna
             FROM pengguna
@@ -1037,12 +1063,16 @@ def update_profile(id):
         """, (email, id))
 
         existing_user = cur.fetchone()
-
         if existing_user:
             cur.close()
             return jsonify({
                 'message': 'Email sudah digunakan'
             }), 400
+
+        cur.execute("SELECT foto_profile FROM pengguna WHERE id_pengguna=%s", (id,))
+        current_user_data = cur.fetchone()
+        
+        foto_profile_final = foto_profile_baru if foto_profile_baru is not None else (current_user_data[0] if current_user_data else None)
 
         cur.execute("""
             UPDATE pengguna
@@ -1060,124 +1090,20 @@ def update_profile(id):
             tanggal_lahir,
             jenis_kelamin,
             no_hp,
-            foto_profile,
+            foto_profile_final,
             id
         ))
 
         mysql.connection.commit()
-
         cur.close()
 
         return jsonify({
-            'message': 'Profil berhasil diperbarui'
+            'message': 'Profil berhasil diperbarui',
+            'foto_profile': foto_profile_final
         })
 
     except Exception as e:
-        return jsonify({
-            'message': str(e)
-        }), 500
-
-# UPLOAD FOTO PROFILE
-@app.route('/upload-profile/<int:id>', methods=['POST'])
-def upload_profile(id):
-    try:
-        if 'foto' not in request.files:
-            return jsonify({'message': 'File tidak ditemukan di dalam request (key harus "foto")'}), 400
-
-        file = request.files['foto']
-
-        if file.filename == '':
-            return jsonify({'message': 'File kosong atau tidak ada nama file'}), 400
-
-        filename = secure_filename(file.filename)
-        filename = f"user_{id}_{filename}"
-
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        if not os.path.exists(app.config['UPLOAD_FOLDER']):
-            os.makedirs(app.config['UPLOAD_FOLDER'], mode=0o777, exist_ok=True)
-
-        file.save(filepath)
-        
-        foto_path = f"/static/profile/{filename}"
-
-        conn = mysql.connection
-        cur = conn.cursor()
-        cur.execute("""
-            UPDATE pengguna
-            SET foto_profile=%s
-            WHERE id_pengguna=%s
-        """, (foto_path, id))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        return jsonify({
-            'message': 'Foto berhasil diupload',
-            'foto_profile': foto_path
-        })
-
-    except Exception as e:
-        print("--- EROR UPLOAD FOTO ---")
-        traceback.print_exc() 
-        return jsonify({'message': f'Server Error saat upload: {str(e)}'}), 500
-    
-@app.route('/static/profile/<filename>')
-def profile_file(filename):
-    return send_from_directory(
-        app.config['UPLOAD_FOLDER'],
-        filename
-    )
-
-# HAPUS FOTO PROFILE
-@app.route('/delete_profile_photo/<int:id>', methods=['DELETE'])
-def delete_profile_photo(id):
-
-    try:
-        cur = mysql.connection.cursor()
-
-        # ambil foto lama
-        cur.execute("""
-            SELECT foto_profile
-            FROM pengguna
-            WHERE id_pengguna=%s
-        """, (id,))
-
-        user = cur.fetchone()
-
-        if not user:
-            return jsonify({
-                'message': 'User tidak ditemukan'
-            }), 404
-
-        foto_path = user[0]
-
-        # hapus file fisik
-        if foto_path:
-            filename_only = os.path.basename(foto_path)
-
-            full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename_only)
-
-            if os.path.exists(full_path):
-                os.remove(full_path)
-
-        # update database
-        cur.execute("""
-            UPDATE pengguna
-            SET foto_profile=NULL
-            WHERE id_pengguna=%s
-        """, (id,))
-
-        mysql.connection.commit()
-
-        cur.close()
-
-        return jsonify({
-            'message': 'Foto berhasil dihapus'
-        })
-
-    except Exception as e:
+        traceback.print_exc()
         return jsonify({
             'message': str(e)
         }), 500
