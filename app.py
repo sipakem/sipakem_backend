@@ -31,10 +31,14 @@ def log_aktivitas(admin_id, aktivitas):
         cur.close()
     except Exception as e:
         print("Log aktivitas error:", e)
+        
+if os.environ.get('RAILWAY_ENVIRONMENT'):
+    UPLOAD_FOLDER = '/app/static/profile'
+else:
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'static', 'profile')
 
-UPLOAD_FOLDER = 'static/profile'
 if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -1143,13 +1147,9 @@ def delete_profile_photo(id):
 
         # hapus file fisik
         if foto_path:
+            filename_only = os.path.basename(foto_path)
 
-            file_path = foto_path.replace('/static/profile/', '')
-
-            full_path = os.path.join(
-                app.config['UPLOAD_FOLDER'],
-                file_path
-            )
+            full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename_only)
 
             if os.path.exists(full_path):
                 os.remove(full_path)
